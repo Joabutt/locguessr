@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocGuessr</title>
+    <script src="https://www.gstatic.com/firebasejs/8.4.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.4.2/firebase-database.js"></script>
+    <link rel="icon" href="/icon" sizes="any" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lexend+Deca&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Lexend Deca", sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f3f3f3;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-size: 16px;
+      }
+      h1 {
+        font-size: 32px;
+        color: #333;
+      }
+      h2 {
+        font-size: 18px;
+        color: #888;
+      }
+      button {
+        cursor: pointer;
+        color: #fff;
+        background-color: #3f51b5;
+        border: none;
+        border-radius: 5px;
+        padding: 1em;
+        margin-top: 1em;
+      }
+      #message {
+        margin-top: 2em;
+        font-size: 24px;
+      }
+      #upload-form {
+        max-width: 600px;
+        width: 100%;
+      }
+      #uploaded-image-container {
+        width: 100%;
+        max-height: 400px;
+        overflow: hidden;
+      }
+      #uploaded-image {
+        width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+        <div style="position: fixed; right: 10px; top: 10px; display: flex; gap: 10px;">
+            <a href="/about"><i class="fas fa-info-circle" style="font-size: 24px; color: black;"></i></a>
+            <a href="https://github.com/joabutt/locguessr"><i class="fab fa-github" style="font-size: 24px; color: black;"></i></a>
+          </div>
+          
+        <h1>LocGuessr 📍</h1>
+      <h2 id="counter-display" style="color: red"></h2>
+      <h2>Location guessing with GPT-4 Vision</h2>
+      <form
+        action="/upload"
+        method="POST"
+        id="upload-form"
+        enctype="multipart/form-data"
+      >
+        <center>
+          <input
+            type="file"
+            id="image"
+            name="image"
+            accept="image/*"
+            class="mb-4"
+          />
+          <button>Submit</button>
+        </center>
+        <br />
+        <div id="uploaded-image-container">
+          <img id="uploaded-image" src="" alt="" />
+        </div>
+        <div id="message"></div>
+      </form>
+    </div>
+    <script>
+      const firebaseConfig = {
+        //your firebase config
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+
+      var database = firebase.database();
+      var counterRef = database.ref("counter");
+
+      // Update front end every time the counter changes
+      counterRef.on("value", function (snapshot) {
+        const counterValue = snapshot.val();
+        if (counterValue !== null) {
+          // Replace 'counter-display' with the id of the HTML element where you want to show the count.
+          document.getElementById("counter-display").textContent =
+            "Remaining image searches: " + counterValue;
+        } else {
+          // Execute when counter value is null - possible in case when no data is in Firebase
+          document.getElementById("counter-display").textContent =
+            "Remaining image searches: 50";
+        }
+      });
+
+      const uploadForm = document.getElementById("upload-form");
+      const imageInput = document.getElementById("image");
+      const uploadedImage = document.getElementById("uploaded-image");
+      const messageDiv = document.getElementById("message");
+
+      uploadForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        const formData = new FormData(uploadForm);
+        const file = imageInput.files[0];
+
+        // Display chosen image
+        const reader = new FileReader();
+        reader.onloadend = function () {
+          uploadedImage.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+
+        // Set loading message
+        messageDiv.textContent = "Loading...";
+        fetch("/upload", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => {
+            // Check if response is ok (status is within [200-299])
+            // If not, throw an error
+            if (!response.ok) {
+              throw response;
+            }
+            // Else, it's ok, proceed with text()
+            return response.text();
+          })
+          .then((data) => {
+            // Replace loading message with server response
+            const countryCode = data.match(/\((.*?)\)/)[1].toLowerCase();
+            const flagTemplate = `
+      <img
+        src="https://flagcdn.com/48x36/${countryCode}.png"
+        srcset="https://flagcdn.com/32x24/${countryCode}.png 2x,
+        https://flagcdn.com/16x12/${countryCode}.png 1x"
+        width="16"
+        height="12"
+        alt="${countryCode.toUpperCase()}">
+    `;
+            messageDiv.innerHTML = `${data} ${flagTemplate}`;
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            // check if error is Response object
+            if (error instanceof Response) {
+              // convert the error message to text and then display
+              error.text().then((errorMessage) => {
+                messageDiv.textContent = errorMessage;
+              });
+            } else {
+              // Else, some other error occurred
+              messageDiv.textContent =
+                "An error occurred while uploading the image.";
+            }
+          });
+      });
+    </script>
+  </body>
+</html>
